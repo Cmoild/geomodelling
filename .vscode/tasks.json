@@ -1,0 +1,40 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+        {
+            "type": "cppbuild",
+            "label": "C/C++: g++.exe build active file",
+            "command": "C:\\msys64\\ucrt64\\bin\\g++.exe",
+            "args": [
+                "-g",
+                "-I${workspaceFolder}/include",
+                "-L${workspaceFolder}/lib",
+                "${workspaceFolder}/src/main.cpp",
+                "${workspaceFolder}/src/glad.c",
+                "${workspaceFolder}/src/imgui/imgui.cpp",
+                "${workspaceFolder}/src/imgui/imgui_impl_glfw.cpp",
+                "${workspaceFolder}/src/imgui/imgui_impl_opengl3.cpp",
+                "${workspaceFolder}/src/imgui/imgui_demo.cpp",
+                "${workspaceFolder}/src/imgui/imgui_draw.cpp",
+                "${workspaceFolder}/src/imgui/imgui_tables.cpp",
+                "${workspaceFolder}/src/imgui/imgui_widgets.cpp",
+                "-lglfw3dll",
+                "-lopengl32",
+                "-mwindows",
+                "-o",
+                "${workspaceFolder}/geomod.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": "compiler: C:\\msys64\\ucrt64\\bin\\g++.exe"
+        }
+    ]
+}
