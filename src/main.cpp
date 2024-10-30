@@ -6,6 +6,9 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_opengl3.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <cmath>
 
 const GLuint WIDTH = 800, HEIGHT = 600;
@@ -284,8 +287,8 @@ int main() {
         ImGui::NewFrame();
 
         // Создание окна управления
-        ImGui::Begin(u8"Rotation Control");
-        ImGui::SliderFloat(u8"Rotation Speed", &rotationSpeed, 0.0f, 5.0f);
+        ImGui::Begin(u8"Контроль вращения");
+        ImGui::SliderFloat(u8"Скорость вращения", &rotationSpeed, 0.0f, 5.0f);
         ImGui::End();
 
         // Отрисовка
@@ -298,6 +301,7 @@ int main() {
 
         float projection[16], view[16], model[16];
         setPerspective(projection, 45.0f * 3.14159265f / 180.0f, (float)WIDTH / (float)HEIGHT, 0.1f, 100.0f);
+        
         setView(view, 0.0f, 0.0f, 3.0f);
 
         // Обновите uniform-переменные
