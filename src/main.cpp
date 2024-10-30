@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include "shader_programs.h"
 #include <cmath>
 
 const GLuint WIDTH = 800, HEIGHT = 600;
@@ -36,99 +37,11 @@ void setPerspective(float* matrix, float fov, float aspect, float near, float fa
     matrix[13] = 0.0f;
     matrix[14] = -(2.0f * far * near) / (far - near);
     matrix[15] = 0.0f;
+
 }
 
-void setView(float* matrix, float cameraX, float cameraY, float cameraZ) {
-    matrix[0] = 1.0f; matrix[1] = 0.0f; matrix[2] = 0.0f; matrix[3] = 0.0f;
-    matrix[4] = 0.0f; matrix[5] = 1.0f; matrix[6] = 0.0f; matrix[7] = 0.0f;
-    matrix[8] = 0.0f; matrix[9] = 0.0f; matrix[10] = 1.0f; matrix[11] = 0.0f;
-    matrix[12] = -cameraX; matrix[13] = -cameraY; matrix[14] = -cameraZ; matrix[15] = 1.0f;
-}
-
-// Функция для создания шейдеров
-GLuint createShaderProgram() {
-    const char* vertexShaderSource = R"(
-    #version 330 core
-    layout(location = 0) in vec3 aPos;
-
-    uniform mat4 projection;
-    uniform mat4 view;
-    uniform mat4 model;
-
-    void main() {
-        gl_Position = projection * view * model * vec4(aPos, 1.0);
-    }
-    )";
-
-    const char* fragmentShaderSource = R"(
-    #version 330 core
-    out vec4 FragColor;
-
-    void main() {
-        FragColor = vec4(1.0, 0.5, 0.2, 1.0); // Оранжевый цвет
-    }
-    )";
-
-    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, nullptr);
-    glCompileShader(vertexShader);
-
-    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, nullptr);
-    glCompileShader(fragmentShader);
-
-    GLuint shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-
-    return shaderProgram;
-}
-
-GLuint createShaderProgramEdges(){
-    const char* vertexShaderEdgesSource = R"(
-    #version 330 core
-    layout(location = 0) in vec3 position;
-
-    uniform mat4 projection;
-    uniform mat4 view;
-    uniform mat4 model;
-
-    void main() {
-        gl_Position = projection * view * model * vec4(position, 1.0);
-        gl_LineWidth = 2.0; // Установите ширину линий
-    }
-    )";
-
-    const char* fragmentShaderEdgesSource = R"(
-    #version 330 core
-    out vec4 fragColor;
-
-    void main() {
-        fragColor = vec4(0.0, 0.0, 0.0, 1.0); // Черный цвет
-    }
-    )";
-
-    GLuint vertexShaderEdges = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShaderEdges, 1, &vertexShaderEdgesSource, nullptr);
-    glCompileShader(vertexShaderEdges);
-
-    GLuint fragmentShaderEdges = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShaderEdges, 1, &fragmentShaderEdgesSource, nullptr);
-    glCompileShader(fragmentShaderEdges);
-
-    GLuint shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShaderEdges);
-    glAttachShader(shaderProgram, fragmentShaderEdges);
-    glLinkProgram(shaderProgram);
-
-    glDeleteShader(vertexShaderEdges);
-    glDeleteShader(fragmentShaderEdges);
-
-    return shaderProgram;
+void setView(glm::mat4& matrix, float cameraX, float cameraY, float cameraZ) {
+    matrix[3][0] = -cameraX; matrix[3][1] = -cameraY; matrix[3][2] = -cameraZ;
 }
 
 // Обработчик изменения размера окна
@@ -144,6 +57,7 @@ void processInput(GLFWwindow* window) {
 
 // Глобальные переменные для отслеживания состояния мыши
 bool mousePressed = false;
+bool lcontrolPressed = false;
 double lastMouseX = 0.0, lastMouseY = 0.0;
 float angleX = 0.0f, angleY = 0.0f; // Углы вращения по осям X и Y
 
@@ -159,31 +73,65 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 // Обработчик движения мыши
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
+    //if (!lcontrolPressed) return;
     if (mousePressed) {
         double deltaX = xpos - lastMouseX;
         double deltaY = ypos - lastMouseY;
 
         // Обновление углов вращения
-        angleX += deltaY * 0.01f; // Чувствительность по оси Y
-        angleY += deltaX * 0.01f; // Чувствительность по оси X
+        angleX += deltaY * 0.5f; // Чувствительность по оси Y
+        angleY += deltaX * 0.5f; // Чувствительность по оси X
 
         lastMouseX = xpos;
         lastMouseY = ypos;
     }
 }
 
-// Упрощенная функция для установки матрицы модели (вращение)
-void setModelMatrix(float* matrix, float angleX, float angleY) {
-    float cX = cos(angleX);
-    float sX = sin(angleX);
-    float cY = cos(angleY);
-    float sY = sin(angleY);
+void lconrol_button_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if (key == GLFW_KEY_LEFT_CONTROL) {
+        lcontrolPressed = (action == GLFW_PRESS);
+    }
+}
 
-    // Обновление матрицы поворота по осям Y и X
-    matrix[0] = cY; matrix[1] = 0.0f; matrix[2] = sY; matrix[3] = 0.0f;
-    matrix[4] = sX * sY; matrix[5] = cX; matrix[6] = -sX * cY; matrix[7] = 0.0f;
-    matrix[8] = -cX * sY; matrix[9] = sX; matrix[10] = cX * cY; matrix[11] = 0.0f;
-    matrix[12] = 0.0f; matrix[13] = 0.0f; matrix[14] = 0.0f; matrix[15] = 1.0f;
+float viewCameraZ = 3.0f; // Удаление по оси Z
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    viewCameraZ -= yoffset * 0.1f;
+    if (viewCameraZ < 1.0f)
+        viewCameraZ = 1.0f;
+    if (viewCameraZ > 100.0f)
+        viewCameraZ = 100.0f;
+}
+
+void renderScene(unsigned int VAO, GLuint shaderProgram) {
+    // Отрисовка
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+
+    glUseProgram(shaderProgram);
+    //glUseProgram(shaderProgramEdges);
+
+    float projection[16];
+    setPerspective(projection, 45.0f * 3.14159265f / 180.0f, (float)WIDTH / (float)HEIGHT, 0.1f, 100.0f);
+    //glm::mat4 projection = glm::perspective(glm::radians(45.0f * 3.14159265f / 180.0f), (float)WIDTH / (float)HEIGHT, 0.1f, 100.0f);
+
+    glm::mat4 view = glm::mat4(1.0f);
+    //float view[16];
+    setView(view, 0.0f, 0.0f, viewCameraZ);
+
+    // Обновите uniform-переменные
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, projection);
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+    
+    // Обновление модели
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::rotate(model, glm::radians(angleX), glm::vec3(1.0f, 0.0f, 0.0f)); // Вращение по оси X
+    model = glm::rotate(model, glm::radians(angleY), glm::vec3(0.0f, 1.0f, 0.0f));   // Вращение по оси Y
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+
+    glBindVertexArray(VAO);
+    glDrawElements(GL_TRIANGLES, 18, GL_UNSIGNED_INT, 0); // поменять на GL_TRIANGLES
 }
 
 int main() {
@@ -214,28 +162,36 @@ int main() {
 
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetCursorPosCallback(window, cursor_position_callback);
+    glfwSetKeyCallback(window,lconrol_button_callback);
+    glfwSetScrollCallback(window, scroll_callback);
+
 
     // Настройка вершин куба
     float vertices[] = {
         // Передняя грань
-        -0.5f, -0.5f,  0.5f,
-         0.5f, -0.5f,  0.5f,
-         0.5f,  0.5f,  0.5f,
-        -0.5f,  0.5f,  0.5f,
+        -5.f, -5.f,  5.f,
+         5.f, -5.f,  5.f,
+         5.f,  5.f,  5.f,
+        -5.f,  5.f,  5.f,
         // Задняя грань
-        -0.5f, -0.5f, -0.5f,
-        -0.5f,  0.5f, -0.5f,
-         0.5f,  0.5f, -0.5f,
-         0.5f, -0.5f, -0.5f,
+        //-0.5f, -0.5f, -0.5f,
+        //-0.5f,  0.5f, -0.5f,
+        // 0.5f,  0.5f, -0.5f,
+        // 0.5f, -0.5f, -0.5f,
+        0.f, 0.f, -10.f,
     };
 
     unsigned int indices[] = {
         0, 1, 2, 2, 3, 0, // Передняя грань
-        4, 5, 6, 6, 7, 4, // Задняя грань
-        0, 1, 7, 7, 4, 0, // Левая грань
-        1, 2, 6, 6, 7, 1, // Правая грань
-        2, 3, 5, 5, 6, 2, // Верхняя грань
-        3, 0, 4, 4, 5, 3  // Нижняя грань
+        //4, 5, 6, 6, 7, 4, // Задняя грань
+        //0, 1, 7, 7, 4, 0, // Левая грань
+        //1, 2, 6, 6, 7, 1, // Правая грань
+        //2, 3, 5, 5, 6, 2, // Верхняя грань
+        //3, 0, 4, 4, 5, 3  // Нижняя грань
+        0, 1, 4,
+        1, 2, 4,
+        2, 3, 4,
+        3, 0, 4
     };
 
     unsigned int VAO, VBO, EBO;
@@ -261,9 +217,6 @@ int main() {
     GLuint shaderProgram = createShaderProgram();
     GLuint shaderProgramEdges = createShaderProgramEdges();
 
-    float angle = 0.0f; // Угол вращения
-    float rotationSpeed = 1.0f; // Скорость вращения
-
     // Инициализация ImGui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -287,44 +240,13 @@ int main() {
         ImGui::NewFrame();
 
         // Создание окна управления
-        ImGui::Begin(u8"Контроль вращения");
-        ImGui::SliderFloat(u8"Скорость вращения", &rotationSpeed, 0.0f, 5.0f);
+        ImGui::Begin(u8"Контроль отдаления");
+        ImGui::SliderFloat(u8"отдаление", &viewCameraZ, 0.0f, 10.0f);
         ImGui::End();
 
         // Отрисовка
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_DEPTH_TEST);
+        renderScene(VAO, shaderProgram);
 
-        glUseProgram(shaderProgram);
-        //glUseProgram(shaderProgramEdges);
-
-        float projection[16], view[16], model[16];
-        setPerspective(projection, 45.0f * 3.14159265f / 180.0f, (float)WIDTH / (float)HEIGHT, 0.1f, 100.0f);
-        
-        setView(view, 0.0f, 0.0f, 3.0f);
-
-        // Обновите uniform-переменные
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, projection);
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, view);
-        
-        // Обновление модели
-        setModelMatrix(model, angleX, angleY);
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, model);
-
-        // Увеличение угла вращения с учетом скорости
-        angle += rotationSpeed * 0.01f; // Скорость вращения
-
-        glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-
-        //glEnable(GL_CULL_FACE);
-
-        //glBindVertexArray(VAO);
-        //glDrawElements(GL_LINES, 36, GL_UNSIGNED_INT, 0);
-
-        //glBindVertexArray(0);
-        //glDisable(GL_CULL_FACE);
         // Отрисовка ImGui
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
