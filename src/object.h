@@ -46,9 +46,9 @@ public:
     void generateQuadrangle(Coordinate c1, Coordinate c2, Coordinate c3, Coordinate c4){
         vertices.resize(12, 0);
         vertices[0] = c1.x; vertices[1] = c1.y; vertices[2] = c1.z;
-        vertices[3] = c2.x; vertices[4] = c2.y; vertices[5] = c1.z;
-        vertices[6] = c3.x; vertices[7] = c3.y; vertices[8] = c1.z;
-        vertices[9] = c4.x; vertices[10] = c4.y; vertices[11] = c1.z;
+        vertices[3] = c2.x; vertices[4] = c2.y; vertices[5] = c2.z;
+        vertices[6] = c3.x; vertices[7] = c3.y; vertices[8] = c3.z;
+        vertices[9] = c4.x; vertices[10] = c4.y; vertices[11] = c4.z;
         indices.resize(6, 0);
         indices[0] = 0; indices[1] = 1; indices[2] = 2;
         indices[3] = 0; indices[4] = 2; indices[5] = 3;
@@ -57,7 +57,19 @@ public:
     }
 
     void generateCircle(Coordinate c, float r){
-        
+        //vertices.push_back(c.x); vertices.push_back(c.y); vertices.push_back(c.z);
+        vertices.resize(360 * 3, 0);
+        for (int t = 0; t < 360 * 3; t += 3){
+            vertices[t] = (c.x + r * cos(t * 3.14159265f / 180));
+            vertices[t + 1] = (c.y + r * sin(t * 3.14159265f / 180));
+            vertices[t + 2] = (c.z);
+        }
+        indices.clear();
+        for (int i = 1; i < vertices.size() / 3; i++){
+            indices.push_back(0);
+            indices.push_back(i);
+            indices.push_back(i + 1);
+        }
         generateBuffers();
     }
 
@@ -92,6 +104,16 @@ public:
         indices.push_back(0);
         indices.push_back(vOldSize / 3);
         indices.push_back(vOldSize / 3 - 1);
+
+        generateBuffers();
+    }
+
+    void revolveObject(float angle, float r){
+        glDeleteVertexArrays(1, &VAO);
+        glDeleteBuffers(1, &VBO);
+        glDeleteBuffers(1, &EBO);
+
+
 
         generateBuffers();
     }

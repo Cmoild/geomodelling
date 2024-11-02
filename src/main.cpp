@@ -13,33 +13,7 @@
 #include <cmath>
 #include "object.h"
 
-const GLuint WIDTH = 800, HEIGHT = 600;
-
-// Функции для работы с матрицами
-void setPerspective(float* matrix, float fov, float aspect, float near, float far) {
-    float tanHalfFOV = tan(fov / 2.0f);
-    
-    matrix[0] = 1.0f / (aspect * tanHalfFOV);
-    matrix[1] = 0.0f;
-    matrix[2] = 0.0f;
-    matrix[3] = 0.0f;
-
-    matrix[4] = 0.0f;
-    matrix[5] = 1.0f / tanHalfFOV;
-    matrix[6] = 0.0f;
-    matrix[7] = 0.0f;
-
-    matrix[8] = 0.0f;
-    matrix[9] = 0.0f;
-    matrix[10] = -(far + near) / (far - near);
-    matrix[11] = -1.0f;
-
-    matrix[12] = 0.0f;
-    matrix[13] = 0.0f;
-    matrix[14] = -(2.0f * far * near) / (far - near);
-    matrix[15] = 0.0f;
-
-}
+GLuint WIDTH = 800, HEIGHT = 600;
 
 void setView(glm::mat4& matrix, float cameraX, float cameraY, float cameraZ) {
     matrix[3][0] = -cameraX; matrix[3][1] = -cameraY; matrix[3][2] = -cameraZ;
@@ -47,6 +21,8 @@ void setView(glm::mat4& matrix, float cameraX, float cameraY, float cameraZ) {
 
 // Обработчик изменения размера окна
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    WIDTH = width;
+    HEIGHT = height;
     glViewport(0, 0, width, height);
 }
 
@@ -91,8 +67,8 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
         double deltaY = ypos - lastMouseY;
 
         // Обновление углов вращения
-        angleX += deltaY * 0.5f; // Чувствительность по оси Y
-        angleY += deltaX * 0.5f; // Чувствительность по оси X
+        angleX += deltaY * 0.1f; // Чувствительность по оси Y
+        angleY += deltaX * 0.1f; // Чувствительность по оси X
 
         lastMouseX = xpos;
         lastMouseY = ypos;
@@ -133,16 +109,14 @@ void renderScene(unsigned int VAO, unsigned int VAO2, GLuint shaderProgram) {
     glUseProgram(shaderProgram);
     //glUseProgram(shaderProgramEdges);
 
-    float projection[16];
-    setPerspective(projection, 45.0f * 3.14159265f / 180.0f, (float)WIDTH / (float)HEIGHT, 0.1f, 100.0f);
-    //glm::mat4 projection = glm::perspective(glm::radians(45.0f * 3.14159265f / 180.0f), (float)WIDTH / (float)HEIGHT, 0.1f, 100.0f);
+    glm::mat4 projection = glm::mat4(0.0f);
+    projection = glm::perspective(glm::radians(90.0f), (float)WIDTH / (float)HEIGHT, 0.1f, 100.0f);
 
     glm::mat4 view = glm::mat4(1.0f);
-    //float view[16];
     setView(view, viewCameraX, viewCameraY, viewCameraZ);
 
     // Обновите uniform-переменные
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, projection);
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
     
     // Обновление модели
@@ -152,7 +126,7 @@ void renderScene(unsigned int VAO, unsigned int VAO2, GLuint shaderProgram) {
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 
     glBindVertexArray(VAO);
-    glDrawElements(GL_TRIANGLES, 12 + 3 * 2 * 4, GL_UNSIGNED_INT, 0); // поменять на GL_TRIANGLES
+    glDrawElements(GL_TRIANGLES, 4314, GL_UNSIGNED_INT, 0);
 
     glBindVertexArray(VAO2);
     glDrawElements(GL_TRIANGLES, 12 + 3 * 2 * 4, GL_UNSIGNED_INT, 0);
@@ -195,12 +169,15 @@ int main(int argc, char* argv[]) {
     glfwSwapInterval(1);
 
     Object* object = new Object();
-    object->generateQuadrangle({-1.f, -1.f, 0.f}, {1.f, -1.f, 0.f}, {1.f, 1.f, 0.f}, {-1.f, 1.f, 0.f});
-    object->extrudeObject(-2.f);
+    //object->generateQuadrangle({-1.f, -1.f, 0.f}, {1.f, -1.f, 0.f}, {1.f, 1.f, 0.f}, {-1.f, 1.f, 0.f});
+    //object->extrudeObject(-2.f);
+    object->generateCircle({0.f, 0.f, 0.f}, 2.f);
+    object->extrudeObject(-0.f);
+    std::cout << object->indices.size() << std::endl;
     
     Object* object2 = new Object();
-    object2->generateQuadrangle({-0.5f, -0.5f, 2.f}, {0.5f, -0.5f, 2.f}, {0.5f, 0.5f, 2.f}, {-0.5f, 0.5f, 2.f});
-    object2->extrudeObject(1.f);
+    object2->generateQuadrangle({-0.5f, -0.5f, 2.f}, {0.5f, -0.5f, 2.f}, {0.5f, 0.5f, 3.f}, {-0.5f, 0.5f, 3.f});
+    object2->extrudeObject(2.f);
 
     GLuint shaderProgram = createShaderProgram();
     GLuint shaderProgramEdges = createShaderProgramEdges();
