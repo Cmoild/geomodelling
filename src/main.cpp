@@ -11,6 +11,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "shader_programs.h"
 #include <cmath>
+#include "object.h"
 
 const GLuint WIDTH = 800, HEIGHT = 600;
 
@@ -57,15 +58,26 @@ void processInput(GLFWwindow* window) {
 
 // Глобальные переменные для отслеживания состояния мыши
 bool mousePressed = false;
+bool middlePressed = false;
 bool lcontrolPressed = false;
 double lastMouseX = 0.0, lastMouseY = 0.0;
 float angleX = 0.0f, angleY = 0.0f; // Углы вращения по осям X и Y
+
+float viewCameraZ = 3.0f; // Удаление по оси Z
+float viewCameraX = 0.0f; // Позиция камеры по оси X
+float viewCameraY = 0.0f; // Позиция камеры по оси Y
 
 // Обработчик нажатия мыши
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         mousePressed = (action == GLFW_PRESS);
         if (mousePressed) {
+            glfwGetCursorPos(window, &lastMouseX, &lastMouseY);
+        }
+    }
+    if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
+        middlePressed = (action == GLFW_PRESS);
+        if (middlePressed) {
             glfwGetCursorPos(window, &lastMouseX, &lastMouseY);
         }
     }
@@ -85,6 +97,17 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
         lastMouseX = xpos;
         lastMouseY = ypos;
     }
+    if (middlePressed) {
+        double deltaX = xpos - lastMouseX;
+        double deltaY = ypos - lastMouseY;
+
+        // Обновление углов вращения
+        viewCameraX -= deltaX * 0.01f; // Чувствительность по оси X
+        viewCameraY += deltaY * 0.01f; // Чувствительность по оси Y
+
+        lastMouseX = xpos;
+        lastMouseY = ypos;
+    }
 }
 
 void lconrol_button_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
@@ -92,8 +115,6 @@ void lconrol_button_callback(GLFWwindow* window, int key, int scancode, int acti
         lcontrolPressed = (action == GLFW_PRESS);
     }
 }
-
-float viewCameraZ = 3.0f; // Удаление по оси Z
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     viewCameraZ -= yoffset * 0.1f;
@@ -103,7 +124,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
         viewCameraZ = 100.0f;
 }
 
-void renderScene(unsigned int VAO, GLuint shaderProgram) {
+void renderScene(unsigned int VAO, unsigned int VAO2, GLuint shaderProgram) {
     // Отрисовка
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -118,7 +139,7 @@ void renderScene(unsigned int VAO, GLuint shaderProgram) {
 
     glm::mat4 view = glm::mat4(1.0f);
     //float view[16];
-    setView(view, 0.0f, 0.0f, viewCameraZ);
+    setView(view, viewCameraX, viewCameraY, viewCameraZ);
 
     // Обновите uniform-переменные
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, projection);
@@ -131,16 +152,22 @@ void renderScene(unsigned int VAO, GLuint shaderProgram) {
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 
     glBindVertexArray(VAO);
-    glDrawElements(GL_TRIANGLES, 18, GL_UNSIGNED_INT, 0); // поменять на GL_TRIANGLES
+    glDrawElements(GL_TRIANGLES, 12 + 3 * 2 * 4, GL_UNSIGNED_INT, 0); // поменять на GL_TRIANGLES
+
+    glBindVertexArray(VAO2);
+    glDrawElements(GL_TRIANGLES, 12 + 3 * 2 * 4, GL_UNSIGNED_INT, 0);
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     // Инициализация GLFW
     if (!glfwInit()) {
         std::cerr << "Не удалось инициализировать GLFW" << std::endl;
         return -1;
     }
-    
+    for (int i = 0; i < argc; i++) {
+        std::cout << argv[i] << std::endl;
+    }
+
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -165,54 +192,15 @@ int main() {
     glfwSetKeyCallback(window,lconrol_button_callback);
     glfwSetScrollCallback(window, scroll_callback);
 
-
-    // Настройка вершин куба
-    float vertices[] = {
-        // Передняя грань
-        -5.f, -5.f,  5.f,
-         5.f, -5.f,  5.f,
-         5.f,  5.f,  5.f,
-        -5.f,  5.f,  5.f,
-        // Задняя грань
-        //-0.5f, -0.5f, -0.5f,
-        //-0.5f,  0.5f, -0.5f,
-        // 0.5f,  0.5f, -0.5f,
-        // 0.5f, -0.5f, -0.5f,
-        0.f, 0.f, -10.f,
-    };
-
-    unsigned int indices[] = {
-        0, 1, 2, 2, 3, 0, // Передняя грань
-        //4, 5, 6, 6, 7, 4, // Задняя грань
-        //0, 1, 7, 7, 4, 0, // Левая грань
-        //1, 2, 6, 6, 7, 1, // Правая грань
-        //2, 3, 5, 5, 6, 2, // Верхняя грань
-        //3, 0, 4, 4, 5, 3  // Нижняя грань
-        0, 1, 4,
-        1, 2, 4,
-        2, 3, 4,
-        3, 0, 4
-    };
-
-    unsigned int VAO, VBO, EBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
-
-    glBindVertexArray(VAO);
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
     glfwSwapInterval(1);
+
+    Object* object = new Object();
+    object->generateQuadrangle({-1.f, -1.f, 0.f}, {1.f, -1.f, 0.f}, {1.f, 1.f, 0.f}, {-1.f, 1.f, 0.f});
+    object->extrudeObject(-2.f);
+    
+    Object* object2 = new Object();
+    object2->generateQuadrangle({-0.5f, -0.5f, 2.f}, {0.5f, -0.5f, 2.f}, {0.5f, 0.5f, 2.f}, {-0.5f, 0.5f, 2.f});
+    object2->extrudeObject(1.f);
 
     GLuint shaderProgram = createShaderProgram();
     GLuint shaderProgramEdges = createShaderProgramEdges();
@@ -245,7 +233,7 @@ int main() {
         ImGui::End();
 
         // Отрисовка
-        renderScene(VAO, shaderProgram);
+        renderScene(object->VAO, object2->VAO, shaderProgram);
 
         // Отрисовка ImGui
         ImGui::Render();
@@ -260,9 +248,8 @@ int main() {
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
+    delete object;
+    delete object2;
 
     glfwTerminate();
     return 0;
