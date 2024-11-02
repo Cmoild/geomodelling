@@ -17,6 +17,8 @@ struct Coordinate{
 class Object
 {
 private:
+    std::vector<float> vertices2d;
+    std::vector<unsigned int> indices2d;
 
     void generateBuffers(){
         glGenVertexArrays(1, &VAO);
@@ -54,15 +56,17 @@ public:
         indices[3] = 0; indices[4] = 2; indices[5] = 3;
 
         generateBuffers();
+        vertices2d = vertices;
+        indices2d = indices;
     }
 
     void generateCircle(Coordinate c, float r){
         //vertices.push_back(c.x); vertices.push_back(c.y); vertices.push_back(c.z);
         vertices.resize(360 * 3, 0);
-        for (int t = 0; t < 360 * 3; t += 3){
-            vertices[t] = (c.x + r * cos(t * 3.14159265f / 180));
-            vertices[t + 1] = (c.y + r * sin(t * 3.14159265f / 180));
-            vertices[t + 2] = (c.z);
+        for (int t = 0; t < 360; t++){
+            vertices[t * 3] = (c.x + r * cos((t - 90) * 3.14159265f / 180));
+            vertices[t * 3 + 1] = (c.y + r * sin((t - 90) * 3.14159265f / 180));
+            vertices[t * 3 + 2] = (c.z);
         }
         indices.clear();
         for (int i = 1; i < vertices.size() / 3; i++){
@@ -71,6 +75,29 @@ public:
             indices.push_back(i + 1);
         }
         generateBuffers();
+        vertices2d = vertices;
+        indices2d = indices;
+    }
+
+    void generateHalfCircle(Coordinate c, float r){
+        vertices.resize(180 * 3, 0);
+        for (int t = 0; t < 180; t++){
+            //vertices[t] = (c.x + r * cos(t * 3.14159265f / 180));
+            //vertices[t + 1] = (c.y + r * sin(t * 3.14159265f / 180));
+            //vertices[t + 2] = (c.z);
+            vertices[t * 3] = (c.x + r * cos((t - 90) * 3.14159265f / 180));
+            vertices[t * 3 + 1] = (c.y + r * sin((t - 90) * 3.14159265f / 180));
+            vertices[t * 3 + 2] = (c.z);
+        }
+        indices.clear();
+        for (int i = 1; i < vertices.size() / 3; i++){
+            indices.push_back(0);
+            indices.push_back(i);
+            indices.push_back(i + 1);
+        }
+        generateBuffers();
+        vertices2d = vertices;
+        indices2d = indices;
     }
 
     void extrudeObject(float length){
@@ -112,8 +139,38 @@ public:
         glDeleteVertexArrays(1, &VAO);
         glDeleteBuffers(1, &VBO);
         glDeleteBuffers(1, &EBO);
+        
+        for (int i = 0; i < vertices.size(); i+=3) {
+            vertices[i] += r;
+        }
 
+        int vOldSize = vertices.size();
+        int iOldSize = indices.size();
+        for (int t = 1; t < angle + 1; t++){
+            int curVSize = vertices.size();
+            int curISize = indices.size();
+            for (int i = vOldSize * t; i < vOldSize * (t + 1); i+= 3){
+                vertices.push_back(vertices2d[i - vOldSize * t] * cos(3.14159265f * t / 180) + r * cos(3.14159265f * t / 180));
+                vertices.push_back(vertices2d[i - vOldSize * t + 1]);
+                vertices.push_back(vertices2d[i - vOldSize * t] * sin(3.14159265f * t / 180) + r * sin(3.14159265f * t / 180));
+            }
 
+            for (int i = vOldSize / 3 * t; i < vOldSize / 3 * (t + 1) - 1; i++){
+                indices.push_back(i);
+                indices.push_back(i + 1);
+                indices.push_back(i - vOldSize / 3);
+                indices.push_back(i - vOldSize / 3);
+                indices.push_back(i - vOldSize / 3 + 1);
+                indices.push_back(i + 1);
+            }
+            indices.push_back(vOldSize / 3 * (t + 1) - 1);
+            indices.push_back(vOldSize / 3 * t);
+            indices.push_back(vOldSize / 3 * t - 1);
+            indices.push_back(vOldSize / 3 * (t + 1) - 2 * vOldSize / 3 + 1);
+            //std::cout << "sdffd " << vOldSize / 3 * (t + 1) << ' ' << 2 * vOldSize / 3 << std::endl;
+            indices.push_back(vOldSize / 3 * t);
+            indices.push_back(vOldSize / 3 * t - 1);
+        }
 
         generateBuffers();
     }

@@ -12,6 +12,7 @@
 #include "shader_programs.h"
 #include <cmath>
 #include "object.h"
+#include <vector>
 
 GLuint WIDTH = 800, HEIGHT = 600;
 
@@ -100,7 +101,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
         viewCameraZ = 100.0f;
 }
 
-void renderScene(unsigned int VAO, unsigned int VAO2, GLuint shaderProgram) {
+void renderScene(std::vector<Object*> objects, GLuint shaderProgram) {
     // Отрисовка
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -125,11 +126,11 @@ void renderScene(unsigned int VAO, unsigned int VAO2, GLuint shaderProgram) {
     model = glm::rotate(model, glm::radians(angleY), glm::vec3(0.0f, 1.0f, 0.0f));   // Вращение по оси Y
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 
-    glBindVertexArray(VAO);
+    glBindVertexArray(objects[0]->VAO);
     glDrawElements(GL_TRIANGLES, 4314, GL_UNSIGNED_INT, 0);
 
-    glBindVertexArray(VAO2);
-    glDrawElements(GL_TRIANGLES, 12 + 3 * 2 * 4, GL_UNSIGNED_INT, 0);
+    glBindVertexArray(objects[1]->VAO);
+    glDrawElements(GL_TRIANGLES, objects[1]->indices.size(), GL_UNSIGNED_INT, 0);
 }
 
 int main(int argc, char* argv[]) {
@@ -171,13 +172,26 @@ int main(int argc, char* argv[]) {
     Object* object = new Object();
     //object->generateQuadrangle({-1.f, -1.f, 0.f}, {1.f, -1.f, 0.f}, {1.f, 1.f, 0.f}, {-1.f, 1.f, 0.f});
     //object->extrudeObject(-2.f);
-    object->generateCircle({0.f, 0.f, 0.f}, 2.f);
+    //object->generateCircle({0.f, 0.f, 0.f}, 0.f);
     object->extrudeObject(-0.f);
     std::cout << object->indices.size() << std::endl;
     
     Object* object2 = new Object();
-    object2->generateQuadrangle({-0.5f, -0.5f, 2.f}, {0.5f, -0.5f, 2.f}, {0.5f, 0.5f, 3.f}, {-0.5f, 0.5f, 3.f});
-    object2->extrudeObject(2.f);
+    //object2->generateQuadrangle({0.f, 0.f, 0.f}, {0.f, 0.5f, 0.f}, {0.3f, 0.5f, 0.f}, {0.5f, 0.f, 0.f});
+    //object2->generateCircle({0.f, 0.f, 0.f}, 0.5f);
+    object2->generateHalfCircle({0.f, 0.f, 0.f}, 0.5f);
+    //object2->extrudeObject(1.f);
+    object2->revolveObject(360.f, 0.f);
+    // std::cout << object2->indices.size() << std::endl;
+    // for (int i = 0; i < object2->indices.size(); i+=3) {
+    //     std::cout << object2->indices[i] << " " << object2->indices[i + 1] << " " << object2->indices[i + 2] << std::endl;
+    // }
+    // for (int i = 0; i < object2->vertices.size(); i+=3) {
+    //     std::cout << object2->vertices[i] << " " << object2->vertices[i + 1] << " " << object2->vertices[i + 2] << std::endl;
+    // }
+    std::vector<Object*> objects;
+    objects.push_back(object);
+    objects.push_back(object2);
 
     GLuint shaderProgram = createShaderProgram();
     GLuint shaderProgramEdges = createShaderProgramEdges();
@@ -210,7 +224,7 @@ int main(int argc, char* argv[]) {
         ImGui::End();
 
         // Отрисовка
-        renderScene(object->VAO, object2->VAO, shaderProgram);
+        renderScene(objects, shaderProgram);
 
         // Отрисовка ImGui
         ImGui::Render();
@@ -225,8 +239,9 @@ int main(int argc, char* argv[]) {
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    delete object;
-    delete object2;
+    for (int i = 0; i < objects.size(); i++) {
+        delete objects[i];
+    }
 
     glfwTerminate();
     return 0;
