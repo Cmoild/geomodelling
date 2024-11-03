@@ -19,8 +19,87 @@ class Object
 private:
     std::vector<float> vertices2d;
     std::vector<unsigned int> indices2d;
+    std::vector<float> verticesWithNormals{0 , 0};
+
+    inline void calculateNormals(){
+        verticesWithNormals.clear();
+        //std::vector<glm::vec3> normals(vertices.size() / 3, glm::vec3(0.0f, 0.0f, 0.0f));
+        //std::vector<float> normals{0 , 0};
+        //normals.resize(vertices.size(), 0.0f);
+        float *normals = new float[vertices.size()];
+        for (int i = 0; i < indices.size(); i += 3){
+            unsigned int i1 = indices[i];
+            unsigned int i2 = indices[i + 1];
+            unsigned int i3 = indices[i + 2];
+
+            glm::vec3 v1 = glm::vec3(vertices[i1 * 3], vertices[i1 * 3 + 1], vertices[i1 * 3 + 2]);
+            glm::vec3 v2 = glm::vec3(vertices[i2 * 3], vertices[i2 * 3 + 1], vertices[i2 * 3 + 2]);
+            glm::vec3 v3 = glm::vec3(vertices[i3 * 3], vertices[i3 * 3 + 1], vertices[i3 * 3 + 2]);
+
+            glm::vec3 normal = glm::cross(v2 - v1, v3 - v1);
+
+            normals[i1 * 3] += normal.x;
+            normals[i1 * 3 + 1] += normal.y;
+            normals[i1 * 3 + 2] += normal.z;
+
+            normals[i2 * 3] += normal.x;
+            normals[i2 * 3 + 1] += normal.y;
+            normals[i2 * 3 + 2] += normal.z;
+            
+            normals[i3 * 3] += normal.x;
+            normals[i3 * 3 + 1] += normal.y;
+            normals[i3 * 3 + 2] += normal.z;
+        }
+        for (int i = 0; i < vertices.size(); i+= 3){
+            //normals[i] = glm::normalize(normals[i]);
+            glm::vec3 normalized = glm::normalize(glm::vec3(normals[i], normals[i + 1], normals[i + 2]));
+            normals[i] = normalized.x;
+            normals[i + 1] = normalized.y;
+            normals[i + 2] = normalized.z;
+        }
+
+        
+        std::cout << "tmp size " << vertices.size() << std::endl;
+        verticesWithNormals.resize(vertices.size() * 2, 0);
+        for (int i = 0; i < vertices.size(); i += 3){
+            //std::cout << "tmp size " << tmp.size() << std::endl;
+            // verticesWithNormals.push_back(vertices[i]);
+            // verticesWithNormals.push_back(vertices[i + 1]);
+            // verticesWithNormals.push_back(vertices[i + 2]);
+            // verticesWithNormals.push_back(normals[i / 3].x);
+            // verticesWithNormals.push_back(normals[i / 3].y);
+            // verticesWithNormals.push_back(normals[i / 3].z);
+            // verticesWithNormals.push_back(normals[i]);
+            // verticesWithNormals.push_back(normals[i + 1]);
+            // verticesWithNormals.push_back(normals[i + 2]);
+
+            verticesWithNormals[2 * i] = vertices[i];
+            verticesWithNormals[2 * i + 1] = vertices[i + 1];
+            verticesWithNormals[2 * i + 2] = vertices[i + 2];
+            verticesWithNormals[2 * i + 3] = normals[i];
+            verticesWithNormals[2 * i + 4] = normals[i];
+            verticesWithNormals[2 * i + 5] = normals[i];
+        }
+        //normals.clear();
+        delete [] normals;
+        std::cout << "vertices size " << verticesWithNormals.size() << std::endl;
+    }
 
     void generateBuffers(){
+        // std::cout << "Calculate normals" << std::endl;
+        // try
+        // {
+        //     calculateNormals();
+        // }
+        // catch(const std::exception& e)
+        // {
+        //     std::cerr << e.what() << '\n';
+        // }
+        
+        // //calculateNormals();
+
+        // std::cout << "Generate buffers" << std::endl;
+
         glGenVertexArrays(1, &VAO);
         glGenBuffers(1, &VBO);
         glGenBuffers(1, &EBO);
@@ -38,12 +117,24 @@ private:
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
+
+        // glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+        // glEnableVertexAttribArray(1);
+
+        // glGenVertexArrays(1, &lightVAO);
+        // glBindVertexArray(lightVAO);
+
+        // glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+        
     }
 public:
     std::vector<float> vertices{0, 0};
     std::vector<unsigned int> indices{0, 0};
-    unsigned int VAO, VBO, EBO;
+    unsigned int VAO, VBO, EBO, lightVAO;
     GLint shaderProgram;
+    int type;
+    glm::vec4 FragColor;
 
     void generateQuadrangle(Coordinate c1, Coordinate c2, Coordinate c3, Coordinate c4){
         vertices.resize(12, 0);
@@ -58,6 +149,7 @@ public:
         generateBuffers();
         vertices2d = vertices;
         indices2d = indices;
+        type = OBJECT_QUADRANGLE;
     }
 
     void generateCircle(Coordinate c, float r){
@@ -77,6 +169,7 @@ public:
         generateBuffers();
         vertices2d = vertices;
         indices2d = indices;
+        type = OBJECT_CIRCLE;
     }
 
     void generateHalfCircle(Coordinate c, float r){
@@ -98,6 +191,7 @@ public:
         generateBuffers();
         vertices2d = vertices;
         indices2d = indices;
+        type = OBJECT_CIRCLE;
     }
 
     void extrudeObject(float length){
@@ -176,6 +270,7 @@ public:
     }
 
     ~Object(){
+        glDeleteVertexArrays(1, &lightVAO);
         glDeleteVertexArrays(1, &VAO);
         glDeleteBuffers(1, &VBO);
         glDeleteBuffers(1, &EBO);

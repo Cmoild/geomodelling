@@ -16,6 +16,8 @@
 
 GLuint WIDTH = 800, HEIGHT = 600;
 
+glm::vec3 lightPos(0.f, 0.f, 4.0f);
+
 void setView(glm::mat4& matrix, float cameraX, float cameraY, float cameraZ) {
     matrix[3][0] = -cameraX; matrix[3][1] = -cameraY; matrix[3][2] = -cameraZ;
 }
@@ -101,14 +103,11 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
         viewCameraZ = 100.0f;
 }
 
-void renderScene(std::vector<Object*> objects, GLuint shaderProgram) {
+void renderScene(std::vector<Object*> objects, GLuint shaderProgram, GLuint shaderProgramEdges) {
     // Отрисовка
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
-
-    glUseProgram(shaderProgram);
-    //glUseProgram(shaderProgramEdges);
 
     glm::mat4 projection = glm::mat4(0.0f);
     projection = glm::perspective(glm::radians(90.0f), (float)WIDTH / (float)HEIGHT, 0.1f, 100.0f);
@@ -116,22 +115,215 @@ void renderScene(std::vector<Object*> objects, GLuint shaderProgram) {
     glm::mat4 view = glm::mat4(1.0f);
     setView(view, viewCameraX, viewCameraY, viewCameraZ);
 
-    // Обновите uniform-переменные
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-    
-    // Обновление модели
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::rotate(model, glm::radians(angleX), glm::vec3(1.0f, 0.0f, 0.0f)); // Вращение по оси X
-    model = glm::rotate(model, glm::radians(angleY), glm::vec3(0.0f, 1.0f, 0.0f));   // Вращение по оси Y
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+    model = glm::rotate(model, glm::radians(angleY), glm::vec3(0.0f, 1.0f, 0.0f));
 
-    glBindVertexArray(objects[0]->VAO);
-    glDrawElements(GL_TRIANGLES, 4314, GL_UNSIGNED_INT, 0);
+    for (int i = 0; i < objects.size(); i++) {
+        glUseProgram(shaderProgram);
 
-    glBindVertexArray(objects[1]->VAO);
-    glDrawElements(GL_TRIANGLES, objects[1]->indices.size(), GL_UNSIGNED_INT, 0);
+        // Обновите uniform-переменные
+        glm::vec4 FragColorUniform = objects[i]->FragColor;
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+        glUniform4fv(glGetUniformLocation(shaderProgram, "FragColorUniform"), 1, glm::value_ptr(FragColorUniform));
+
+        glBindVertexArray(objects[i]->VAO);
+        glDrawElements(GL_TRIANGLES, objects[i]->indices.size(), GL_UNSIGNED_INT, 0);
+
+        glUseProgram(shaderProgramEdges);
+
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgramEdges, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgramEdges, "view"), 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgramEdges, "model"), 1, GL_FALSE, glm::value_ptr(model));
+
+        glBindVertexArray(objects[i]->VAO);
+        if (objects[i]->type == OBJECT_CIRCLE)
+            glDrawElements(GL_POINTS, objects[i]->indices.size(), GL_UNSIGNED_INT, 0);
+        else
+            glDrawElements(GL_LINES, objects[i]->indices.size(), GL_UNSIGNED_INT, 0);
+    }
+
 }
+
+// Перечисление типов фигур
+enum class ShapeType {
+    None,
+    Circle,
+    Rectangle,
+    SemiCircle
+};
+
+// Перечисление режимов создания
+enum class ObjCreatingMode {
+    None,
+    Extrude,
+    Revolve
+};
+
+// Параметры фигуры
+struct ShapeParameters {
+    ImVec4 color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);  // Красный цвет по умолчанию
+    float radius = 0.0f;  // Размер фигуры по умолчанию
+    float rotatingRadius = 0.0f;  // Размер фигуры по умолчанию
+    float length = 0.0f;  // Длина фигуры по умолчанию
+};
+
+// Текущая переменная для хранения выбранной фигуры
+ShapeType currentShape = ShapeType::None;
+
+// Текущий режим создания
+ObjCreatingMode currentCreatingMode = ObjCreatingMode::None;
+
+ShapeParameters shapeParams;
+
+// Функция для отображения всплывающего окна
+void ShowShapeConfigPopup() {
+    // Проверка, запущено ли всплывающее окно
+    if (ImGui::BeginPopupModal("Настройки фигуры", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        
+        // Выбор типа фигуры
+        ImGui::Text("Тип базовой фигуры:");
+        if (ImGui::RadioButton("Круг", currentShape == ShapeType::Circle)) {
+            currentShape = ShapeType::Circle;
+        }
+        if (ImGui::RadioButton("Четырехугольник", currentShape == ShapeType::Rectangle)) {
+            currentShape = ShapeType::Rectangle;
+        }
+        if (ImGui::RadioButton("Полукруг", currentShape == ShapeType::SemiCircle)) {
+            currentShape = ShapeType::SemiCircle;
+        }
+
+        ImGui::Separator();
+
+        // Выбор цвета
+        ImGui::Text("Цвет:");
+        ImGui::ColorEdit4("Цвет фигуры", (float*)&shapeParams.color);
+        if (currentShape == ShapeType::SemiCircle || currentShape == ShapeType::Circle) {
+            ImGui::Text("Радиус:");
+            //ImGui::SliderFloat("радиус фигуры", &shapeParams.size, 0.0f, 100.0f);
+            ImGui::InputFloat(" ", &shapeParams.radius, 0.0f, 100.0f);
+            ImGui::Separator();
+        }
+        if (currentCreatingMode == ObjCreatingMode::Revolve) {
+            ImGui::Text("Радиус вращения:");
+            ImGui::InputFloat(" ", &shapeParams.rotatingRadius, 0.0f, 100.0f);
+            ImGui::Separator();
+        }
+        if (currentCreatingMode == ObjCreatingMode::Extrude) {
+            ImGui::Text("Длина выдавливания:");
+            ImGui::InputFloat(" ", &shapeParams.length, 0.0f, 100.0f);
+            ImGui::Separator();
+        }
+        
+        // Выбор размера
+        // ImGui::Text("Размер:");
+        // ImGui::SliderFloat("Размер фигуры", &shapeParams.size, 10.0f, 100.0f);
+
+        // ImGui::Separator();
+
+        // Визуализация фигуры в этом окне
+
+        // Кнопка закрытия всплывающего окна
+        if (ImGui::Button("Закрыть")) {
+            ImGui::CloseCurrentPopup();
+        }
+        if (ImGui::Button("Создать")) {
+            
+        }
+
+        ImGui::EndPopup();
+    }
+}
+
+void VerticalSeparator(float height = 0.0f) {
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+    float line_height = height > 0.0f ? height : ImGui::GetContentRegionAvail().y;
+
+    draw_list->AddLine(
+        ImVec2(cursor_pos.x, cursor_pos.y),                   // Начальная точка
+        ImVec2(cursor_pos.x, cursor_pos.y + line_height),     // Конечная точка
+        ImGui::GetColorU32(ImGuiCol_Separator),               // Цвет линии
+        1.0f                                                  // Толщина линии
+    );
+
+    // Смещаем курсор вправо, чтобы следующие элементы не перекрывали линию
+    ImGui::SetCursorScreenPos(ImVec2(cursor_pos.x + 4.0f, cursor_pos.y));
+}
+
+
+// Функция для создания окна с выбором фигур
+void DrawShapesWindow() {
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always); // Устанавливаем позицию окна
+    ImGui::SetNextWindowSize(ImVec2(200, 100), ImGuiCond_Always); // Фиксированный размер окна
+
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar |
+                                    ImGuiWindowFlags_NoMove |
+                                    ImGuiWindowFlags_NoResize |
+                                    ImGuiWindowFlags_NoCollapse;
+
+    ImGui::Begin("Shapes Window", nullptr, window_flags);
+
+    ImGui::Text("Создать фигуру:");
+    if (ImGui::Button("Выдавливанием", ImVec2(100, 20))) {
+        ImGui::OpenPopup("Настройки фигуры");
+        currentCreatingMode = ObjCreatingMode::Extrude;
+    }
+    if (ImGui::Button("Вращением", ImVec2(100, 20))) {
+        ImGui::OpenPopup("Настройки фигуры");
+        currentCreatingMode = ObjCreatingMode::Revolve;
+    }
+
+    ShowShapeConfigPopup();
+
+    ImGui::End();
+}
+
+// Функция для создания окна с опциями
+void DrawOptionsWindow() {
+    ImGui::SetNextWindowPos(ImVec2(200, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(200, 100), ImGuiCond_Always);
+
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar |
+                                    ImGuiWindowFlags_NoMove |
+                                    ImGuiWindowFlags_NoResize |
+                                    ImGuiWindowFlags_NoCollapse;
+
+    ImGui::Begin("Options Window", nullptr, window_flags);
+
+    ImGui::Text("Опции:");
+    if (ImGui::Button("Выбрать", ImVec2(100, 20))) {
+        // Логика для настройки 1
+    }
+    if (ImGui::Button("Удалить", ImVec2(100, 20))) {
+        // Логика для настройки 2
+    }
+    if (ImGui::Button("Изменить", ImVec2(100, 20))) {
+        // Логика для настройки 2
+    }
+
+    ImGui::End();
+}
+
+void SliderWindow() {
+    ImGui::SetNextWindowPos(ImVec2(400, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(WIDTH - 400, 100), ImGuiCond_Always);
+
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar |
+                                    ImGuiWindowFlags_NoMove |
+                                    ImGuiWindowFlags_NoResize |
+                                    ImGuiWindowFlags_NoCollapse;
+
+    ImGui::Begin("Slider Window", nullptr, window_flags);
+
+    ImGui::Text("Отдалить:");
+    ImGui::SliderFloat(u8" ", &viewCameraZ, 0.0f, 50.0f);
+
+    ImGui::End();
+}
+
 
 int main(int argc, char* argv[]) {
     // Инициализация GLFW
@@ -170,30 +362,26 @@ int main(int argc, char* argv[]) {
     glfwSwapInterval(1);
 
     Object* object = new Object();
-    //object->generateQuadrangle({-1.f, -1.f, 0.f}, {1.f, -1.f, 0.f}, {1.f, 1.f, 0.f}, {-1.f, 1.f, 0.f});
-    //object->extrudeObject(-2.f);
-    //object->generateCircle({0.f, 0.f, 0.f}, 0.f);
-    object->extrudeObject(-0.f);
-    std::cout << object->indices.size() << std::endl;
+    object->generateQuadrangle({-1.f, 0.f, 0.f}, {1.f, 0.f, 0.f}, {1.f, 2.f, 0.f}, {-1.f, 2.f, 0.f});
+    object->extrudeObject(-2.f);
+    object->FragColor = {0.f, 1.f, 0.f, 1.f};
     
     Object* object2 = new Object();
-    //object2->generateQuadrangle({0.f, 0.f, 0.f}, {0.f, 0.5f, 0.f}, {0.3f, 0.5f, 0.f}, {0.5f, 0.f, 0.f});
-    //object2->generateCircle({0.f, 0.f, 0.f}, 0.5f);
-    object2->generateHalfCircle({0.f, 0.f, 0.f}, 0.5f);
-    //object2->extrudeObject(1.f);
-    object2->revolveObject(360.f, 0.f);
-    // std::cout << object2->indices.size() << std::endl;
-    // for (int i = 0; i < object2->indices.size(); i+=3) {
-    //     std::cout << object2->indices[i] << " " << object2->indices[i + 1] << " " << object2->indices[i + 2] << std::endl;
-    // }
-    // for (int i = 0; i < object2->vertices.size(); i+=3) {
-    //     std::cout << object2->vertices[i] << " " << object2->vertices[i + 1] << " " << object2->vertices[i + 2] << std::endl;
-    // }
+    object2->generateCircle({0.f, 0.f, 0.f}, 0.5f);
+    object2->revolveObject(360.f, 3.f);
+    object2->FragColor = {1.f, 0.f, 0.f, 1.f};
+
+    Object* object3 = new Object();
+    object3->generateQuadrangle({-10.f, 0.f, 10.f}, {10.f, 0.f, 10.f}, {10.f, 0.f, -10.f}, {-10.f, 0.f, -10.f});
+    object3->FragColor = {0.f, 0.f, 1.f, 1.f};
+
+
     std::vector<Object*> objects;
     objects.push_back(object);
     objects.push_back(object2);
+    objects.push_back(object3);
 
-    GLuint shaderProgram = createShaderProgram();
+    GLuint shaderProgramObject = createShaderProgramObject();
     GLuint shaderProgramEdges = createShaderProgramEdges();
 
     // Инициализация ImGui
@@ -218,13 +406,16 @@ int main(int argc, char* argv[]) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // Создание окна управления
-        ImGui::Begin(u8"Контроль отдаления");
-        ImGui::SliderFloat(u8"отдаление", &viewCameraZ, 0.0f, 10.0f);
-        ImGui::End();
+        // Отрисовка меню
+        DrawShapesWindow();
+        DrawOptionsWindow();
+        SliderWindow();
+        
+
+        
 
         // Отрисовка
-        renderScene(objects, shaderProgram);
+        renderScene(objects, shaderProgramObject, shaderProgramEdges);
 
         // Отрисовка ImGui
         ImGui::Render();
