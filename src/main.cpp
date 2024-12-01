@@ -96,14 +96,66 @@ void lconrol_button_callback(GLFWwindow* window, int key, int scancode, int acti
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-    viewCameraZ -= yoffset * 0.1f;
-    if (viewCameraZ < 1.0f)
-        viewCameraZ = 1.0f;
+    viewCameraZ -= yoffset * 0.5f;
+    if (viewCameraZ < 0.0f)
+        viewCameraZ = 0.0f;
     if (viewCameraZ > 100.0f)
         viewCameraZ = 100.0f;
 }
 
-void renderScene(std::vector<Object*> objects, GLuint shaderProgram, GLuint shaderProgramEdges) {
+// Функция для проекции 3D объекта на 2D экран
+bool projectToScreen(const glm::vec3& objPos, const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection, GLdouble& winX, GLdouble& winY) {
+    glm::vec4 worldPos = glm::vec4(objPos, 1.0f);
+
+    // Создаем модельно-видовую матрицу
+    glm::mat4 modelview = view * model;
+
+    // Преобразуем в координаты клип-спейса
+    glm::vec4 clipSpacePos = projection * modelview * worldPos;
+
+    // Преобразуем в NDC (нормализованные координаты устройства)
+    if (clipSpacePos.w != 0.0f) {
+        clipSpacePos /= clipSpacePos.w;
+    } else {
+        return false; // Невозможно преобразовать, объект вне видимости
+    }
+
+    // Получаем параметры области вывода
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    // Преобразуем в оконные координаты
+    winX = viewport[0] + (1 + clipSpacePos.x) * viewport[2] / 2;
+    winY = viewport[1] + (1 + clipSpacePos.y) * viewport[3] / 2;
+
+    return true;
+}
+
+// Проверка нахождения курсора над объектом
+bool isCursorOverObject(const glm::vec3& objPos, const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection, GLFWwindow* window) {
+    GLdouble winX, winY;
+    if (!projectToScreen(objPos, model, view, projection, winX, winY)) {
+        return false;
+    }
+
+    // Получаем позицию курсора
+    double cursorX, cursorY;
+    glfwGetCursorPos(window, &cursorX, &cursorY);
+    
+    // Отражаем Y относительно высоты окна
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    cursorY = viewport[3] - cursorY;
+
+    // Допустимый радиус вокруг объекта
+    float threshold = 5.0f;
+
+    // Проверка, находится ли курсор в пределах радиуса
+    return (abs(cursorX - winX) < threshold && abs(cursorY - winY) < threshold);
+}
+
+
+void renderScene(std::vector<Object*> objects, GLuint shaderProgram, GLuint shaderProgramEdges, GLFWwindow* window) {
     // Отрисовка
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -120,26 +172,39 @@ void renderScene(std::vector<Object*> objects, GLuint shaderProgram, GLuint shad
     model = glm::rotate(model, glm::radians(angleY), glm::vec3(0.0f, 1.0f, 0.0f));
 
     for (int i = 0; i < objects.size(); i++) {
+        objects[i]->model = model;
+        // objects[i]->model = glm::translate(objects[i]->model, objects[i]->position);
+        objects[i]->model = glm::rotate(objects[i]->model, glm::radians(objects[i]->rotation[0]), glm::vec3(1.0f, 0.0f, 0.0f));
+        objects[i]->model = glm::rotate(objects[i]->model, glm::radians(objects[i]->rotation[1]), glm::vec3(0.0f, 1.0f, 0.0f));
+        objects[i]->model = glm::rotate(objects[i]->model, glm::radians(objects[i]->rotation[2]), glm::vec3(0.0f, 0.0f, 1.0f));
+        objects[i]->model = glm::translate(objects[i]->model, objects[i]->position);
+    }
+
+    for (int i = 0; i < objects.size(); i++) {
         glUseProgram(shaderProgram);
 
         // Обновите uniform-переменные
         glm::vec4 FragColorUniform = objects[i]->FragColor;
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(objects[i]->model));
         glUniform4fv(glGetUniformLocation(shaderProgram, "FragColorUniform"), 1, glm::value_ptr(FragColorUniform));
 
         glBindVertexArray(objects[i]->VAO);
-        glDrawElements(GL_TRIANGLES, objects[i]->indices.size(), GL_UNSIGNED_INT, 0);
+        if (!(objects[i]->type == OBJECT_NONE)) glDrawElements(GL_TRIANGLES, objects[i]->indices.size(), GL_UNSIGNED_INT, 0);
+
+        //std::cout << isCursorOverObject(glm::vec3(model[3]), model, view, projection, window) << std::endl;
 
         glUseProgram(shaderProgramEdges);
 
         glUniformMatrix4fv(glGetUniformLocation(shaderProgramEdges, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
         glUniformMatrix4fv(glGetUniformLocation(shaderProgramEdges, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgramEdges, "model"), 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgramEdges, "model"), 1, GL_FALSE, glm::value_ptr(objects[i]->model));
 
         glBindVertexArray(objects[i]->VAO);
         if (objects[i]->type == OBJECT_CIRCLE)
+            glDrawElements(GL_POINTS, objects[i]->indices.size(), GL_UNSIGNED_INT, 0);
+        else if (objects[i]->type == OBJECT_NONE)
             glDrawElements(GL_POINTS, objects[i]->indices.size(), GL_UNSIGNED_INT, 0);
         else
             glDrawElements(GL_LINES, objects[i]->indices.size(), GL_UNSIGNED_INT, 0);
@@ -159,7 +224,8 @@ enum class ShapeType {
 enum class ObjCreatingMode {
     None,
     Extrude,
-    Revolve
+    Revolve,
+    Standard
 };
 
 // Параметры фигуры
@@ -203,20 +269,24 @@ void ShowShapeConfigPopup() {
         if (currentShape == ShapeType::SemiCircle || currentShape == ShapeType::Circle) {
             ImGui::Text("Радиус:");
             //ImGui::SliderFloat("радиус фигуры", &shapeParams.size, 0.0f, 100.0f);
-            ImGui::InputFloat(" ", &shapeParams.radius, 0.0f, 100.0f);
+            ImGui::InputFloat("##00", &shapeParams.radius, 0.0f, 100.0f);
             ImGui::Separator();
+            //ImGui::PopID();
         }
         if (currentCreatingMode == ObjCreatingMode::Revolve) {
             ImGui::Text("Радиус вращения:");
-            ImGui::InputFloat(" ", &shapeParams.rotatingRadius, 0.0f, 100.0f);
+            ImGui::InputFloat("##01", &shapeParams.rotatingRadius, 0.0f, 100.0f);
             ImGui::Separator();
+            //ImGui::PopID();
         }
+
         if (currentCreatingMode == ObjCreatingMode::Extrude) {
             ImGui::Text("Длина выдавливания:");
-            ImGui::InputFloat(" ", &shapeParams.length, 0.0f, 100.0f);
+            ImGui::InputFloat("##02", &shapeParams.length, 0.0f, 100.0f);
             ImGui::Separator();
+            //ImGui::PopID();
         }
-        
+
         // Выбор размера
         // ImGui::Text("Размер:");
         // ImGui::SliderFloat("Размер фигуры", &shapeParams.size, 10.0f, 100.0f);
@@ -229,6 +299,7 @@ void ShowShapeConfigPopup() {
         if (ImGui::Button("Закрыть")) {
             ImGui::CloseCurrentPopup();
         }
+        ImGui::SameLine();
         if (ImGui::Button("Создать")) {
             
         }
@@ -274,6 +345,10 @@ void DrawShapesWindow() {
     if (ImGui::Button("Вращением", ImVec2(100, 20))) {
         ImGui::OpenPopup("Настройки фигуры");
         currentCreatingMode = ObjCreatingMode::Revolve;
+    }
+    if (ImGui::Button("Стандартная", ImVec2(100, 20))) {
+        ImGui::OpenPopup("Настройки фигуры");
+        currentCreatingMode = ObjCreatingMode::Standard;
     }
 
     ShowShapeConfigPopup();
@@ -370,16 +445,32 @@ int main(int argc, char* argv[]) {
     object2->generateCircle({0.f, 0.f, 0.f}, 0.5f);
     object2->revolveObject(360.f, 3.f);
     object2->FragColor = {1.f, 0.f, 0.f, 1.f};
-
+    object2->position = {0.f, 1.f, 0.f};
+    object2->rotation = {45.f, 45.f, 45.f};
+    
     Object* object3 = new Object();
     object3->generateQuadrangle({-10.f, 0.f, 10.f}, {10.f, 0.f, 10.f}, {10.f, 0.f, -10.f}, {-10.f, 0.f, -10.f});
     object3->FragColor = {0.f, 0.f, 1.f, 1.f};
 
+    Sphere* sphere = new Sphere({0.f, 0.f, 0.f}, 0.5f);
+    sphere->FragColor = {1.f, 1.f, 0.f, 1.f};
+    sphere->position = {0.f, 0.9f, 0.1f};
 
+    TruncCone* cone = new TruncCone({0.f, 0.f, 0.f}, 0.5f, 0.25f, 1.f);
+    cone->FragColor = {1.f, 0.f, 0.f, 1.f};
+    cone->position = {0.f, 0.1f, 0.f};
+    cone->rotation = {45.f, 0.f, 0.f};
+
+    Object* intersec = cone->checkIntersection(sphere);
+    intersec->FragColor = {1.f, 1.f, 1.f, 1.f};
+    
     std::vector<Object*> objects;
-    objects.push_back(object);
-    objects.push_back(object2);
+    //objects.push_back(object);
+    //objects.push_back(object2);
     objects.push_back(object3);
+    // objects.push_back(cone);
+    // objects.push_back(sphere);
+    objects.push_back(intersec);
 
     GLuint shaderProgramObject = createShaderProgramObject();
     GLuint shaderProgramEdges = createShaderProgramEdges();
@@ -415,7 +506,7 @@ int main(int argc, char* argv[]) {
         
 
         // Отрисовка
-        renderScene(objects, shaderProgramObject, shaderProgramEdges);
+        renderScene(objects, shaderProgramObject, shaderProgramEdges, window);
 
         // Отрисовка ImGui
         ImGui::Render();

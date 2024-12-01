@@ -13,6 +13,7 @@ struct Coordinate{
 
 #define OBJECT_QUADRANGLE 0
 #define OBJECT_CIRCLE 1
+#define OBJECT_NONE 2
 
 class Object
 {
@@ -84,7 +85,7 @@ private:
         delete [] normals;
         std::cout << "vertices size " << verticesWithNormals.size() << std::endl;
     }
-
+public:
     void generateBuffers(){
         // std::cout << "Calculate normals" << std::endl;
         // try
@@ -135,6 +136,9 @@ public:
     GLint shaderProgram;
     int type;
     glm::vec4 FragColor;
+    glm::mat4 model;
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 rotation = glm::vec3(0.0f);
 
     void generateQuadrangle(Coordinate c1, Coordinate c2, Coordinate c3, Coordinate c4){
         vertices.resize(12, 0);
@@ -277,4 +281,119 @@ public:
         delete this;
     }
 
+};
+
+#define OBJECT_SPHERE 0
+#define OBJECT_CONE 1
+
+class TruncCone;
+
+class Sphere : public Object {
+private:
+    
+public:
+    int type3d;
+    float r;
+
+    Sphere(Coordinate c, float r) {
+        generateHalfCircle(c, r);
+        revolveObject(360, 0.f);
+        type3d = OBJECT_SPHERE;
+        this->r = r;
+    }
+
+    void checkIntersection(TruncCone *s) {
+        
+    }
+};
+
+class TruncCone : public Object {
+private:
+    float r1, r2, h;
+public:
+    int type3d;
+
+    TruncCone(Coordinate c, float r1, float r2, float h) {
+        generateQuadrangle(c, {c.x + r1, c.y, c.z}, {c.x + r2, c.y + h, c.z}, {c.x, c.y + h, c.z});
+        revolveObject(360, 0.f);
+        type3d = OBJECT_CONE;
+        this->r1 = r1;
+        this->r2 = r2;
+        this->h = h;
+    }
+
+    Object* checkIntersection(Sphere *s) {
+        Object* obj = new Object();
+        obj->vertices.clear();
+        int n = 0;
+        glm::mat4 model = glm::mat4(1.0f);
+        // model = glm::translate(model, position);
+        model = glm::rotate(model, glm::radians(rotation[0]), glm::vec3(1.0f, 0.0f, 0.0f)); // Вращение по оси X
+        model = glm::rotate(model, glm::radians(rotation[1]), glm::vec3(0.0f, 1.0f, 0.0f)); // Вращение по оси Y
+        model = glm::rotate(model, glm::radians(rotation[2]), glm::vec3(0.0f, 0.0f, 1.0f)); // Вращение по оси Z
+        model = glm::translate(model, position);
+        
+        bool res = false;
+        for (int i = 0; i < vertices.size(); i += 3) {
+            glm::vec4 vertex = model * glm::vec4(vertices[i], vertices[i + 1], vertices[i + 2], 1.0f);
+            // if (sqrt(pow(vertices[i] + position.x - s->position.x, 2) + pow(vertices[i + 1] + position.y - s->position.y, 2) + pow(vertices[i + 2] + position.z - s->position.z, 2)) <= s->r) {
+            //     if (!res) {
+            //         res = true;
+            //         std::cout << ' ' << s->position.x << ' ' << s->position.y << ' ' << s->position.z << std::endl;
+            //         std::cout << sqrt(pow(vertices[i] + position.x - s->position.x, 2) + pow(vertices[i + 1] + position.y - s->position.y, 2) + pow(vertices[i + 2] + position.z - s->position.z, 2)) << std::endl;
+            //         std::cout << sqrt(pow(vertex[0] - s->position.x, 2) + pow(vertex[1] - s->position.y, 2) + pow(vertex[2] - s->position.z, 2)) << std::endl;
+            //     }
+            // }
+            if (sqrt(pow(vertex.x - s->position.x, 2) + pow(vertex.y - s->position.y, 2) + pow(vertex.z - s->position.z, 2)) <= s->r) {
+                //std::cout << '!' << std::endl;
+                obj->vertices.push_back(vertices[i]);
+                obj->vertices.push_back(vertices[i + 1]);
+                obj->vertices.push_back(vertices[i + 2]);
+                n++;
+                std::cout << vertices[i] << ' ' << vertices[i + 1] << ' ' << vertices[i + 2] << std::endl;
+                if (!res) {
+                    res = true;
+                    //std::cout << sqrt(pow(vertex[0] - s->position.x, 2) + pow(vertex[1] - s->position.y, 2) + pow(vertex[2] - s->position.z, 2)) << std::endl;
+                }
+            }
+        }
+        if (res) {
+            std::cout << "Intersection1" << std::endl;
+        }
+
+        glm::mat4 modelSphere = glm::mat4(1.0f);
+        modelSphere = glm::translate(modelSphere, s->position);
+
+        res = false;
+        for (int i = 0; i < s->vertices.size(); i += 3) {
+            glm::vec4 vertex = modelSphere * glm::vec4(s->vertices[i], s->vertices[i + 1], s->vertices[i + 2], 1.0f);
+            vertex = glm::inverse(model) * vertex; // локальные координаты
+            if (vertex.y <= h && vertex.y >= 0) {
+                float locR = (vertex.y - h * r1 / (r1 - r2)) / (h / (r2 - r1));
+                if (sqrt(pow(vertex.x, 2) + pow(vertex.z, 2)) <= locR) {
+                    //std::cout << '!' << std::endl;
+                    obj->vertices.push_back(s->vertices[i] + s->position.x);
+                    obj->vertices.push_back(s->vertices[i + 1] + s->position.y);
+                    obj->vertices.push_back(s->vertices[i + 2] + s->position.z);
+                    
+                    if (!res) {
+                        res = true;
+                        
+                    }
+                }
+            }
+        }
+        if (res) {
+            std::cout << "Intersection2" << std::endl;
+        }
+
+        for (int i = 0; i < obj->vertices.size() / 3; i ++) {
+            obj->indices.push_back(i);
+        }
+        std::cout << obj->vertices.size() << ' ' << n << std::endl;
+        obj->generateBuffers();
+        obj->type = OBJECT_NONE;
+
+        return obj;
+    }
 };
