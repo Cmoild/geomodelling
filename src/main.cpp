@@ -154,6 +154,7 @@ bool isCursorOverObject(const glm::vec3& objPos, const glm::mat4& model, const g
     return (abs(cursorX - winX) < threshold && abs(cursorY - winY) < threshold);
 }
 
+std::vector<int> skipRender;
 
 void renderScene(std::vector<Object*> objects, GLuint shaderProgram, GLuint shaderProgramEdges, GLFWwindow* window) {
     // Отрисовка
@@ -181,6 +182,8 @@ void renderScene(std::vector<Object*> objects, GLuint shaderProgram, GLuint shad
     }
 
     for (int i = 0; i < objects.size(); i++) {
+        if (skipRender[i]) continue;
+
         glUseProgram(shaderProgram);
 
         // Обновите uniform-переменные
@@ -192,7 +195,7 @@ void renderScene(std::vector<Object*> objects, GLuint shaderProgram, GLuint shad
 
         glBindVertexArray(objects[i]->VAO);
         if (!(objects[i]->type == OBJECT_NONE)) glDrawElements(GL_TRIANGLES, objects[i]->indices.size(), GL_UNSIGNED_INT, 0);
-
+        // glDrawElements(GL_TRIANGLES, objects[i]->indices.size(), GL_UNSIGNED_INT, 0);
         //std::cout << isCursorOverObject(glm::vec3(model[3]), model, view, projection, window) << std::endl;
 
         glUseProgram(shaderProgramEdges);
@@ -374,6 +377,8 @@ void DrawOptionsWindow() {
     }
     if (ImGui::Button("Удалить", ImVec2(100, 20))) {
         // Логика для настройки 2
+        skipRender[1] = !skipRender[1];
+        skipRender[2] = !skipRender[2];
     }
     if (ImGui::Button("Изменить", ImVec2(100, 20))) {
         // Логика для настройки 2
@@ -435,41 +440,31 @@ int main(int argc, char* argv[]) {
     glfwSetScrollCallback(window, scroll_callback);
 
     glfwSwapInterval(1);
-
-    Object* object = new Object();
-    object->generateQuadrangle({-1.f, 0.f, 0.f}, {1.f, 0.f, 0.f}, {1.f, 2.f, 0.f}, {-1.f, 2.f, 0.f});
-    object->extrudeObject(-2.f);
-    object->FragColor = {0.f, 1.f, 0.f, 1.f};
-    
-    Object* object2 = new Object();
-    object2->generateCircle({0.f, 0.f, 0.f}, 0.5f);
-    object2->revolveObject(360.f, 3.f);
-    object2->FragColor = {1.f, 0.f, 0.f, 1.f};
-    object2->position = {0.f, 1.f, 0.f};
-    object2->rotation = {45.f, 45.f, 45.f};
     
     Object* object3 = new Object();
     object3->generateQuadrangle({-10.f, 0.f, 10.f}, {10.f, 0.f, 10.f}, {10.f, 0.f, -10.f}, {-10.f, 0.f, -10.f});
     object3->FragColor = {0.f, 0.f, 1.f, 1.f};
+    skipRender.push_back(0);
 
     Sphere* sphere = new Sphere({0.f, 0.f, 0.f}, 0.5f);
     sphere->FragColor = {1.f, 1.f, 0.f, 1.f};
-    sphere->position = {0.f, 0.9f, 0.1f};
+    sphere->position = {0.f, 1.f, 0.f};
+    skipRender.push_back(0);
 
     TruncCone* cone = new TruncCone({0.f, 0.f, 0.f}, 0.5f, 0.25f, 1.f);
     cone->FragColor = {1.f, 0.f, 0.f, 1.f};
-    cone->position = {0.f, 0.1f, 0.f};
+    cone->position = {0.f, 0.f, 0.f};
     cone->rotation = {45.f, 0.f, 0.f};
+    skipRender.push_back(0);
 
     Object* intersec = cone->checkIntersection(sphere);
     intersec->FragColor = {1.f, 1.f, 1.f, 1.f};
+    skipRender.push_back(0);
     
     std::vector<Object*> objects;
-    //objects.push_back(object);
-    //objects.push_back(object2);
     objects.push_back(object3);
-    // objects.push_back(cone);
-    // objects.push_back(sphere);
+    objects.push_back(cone);
+    objects.push_back(sphere);
     objects.push_back(intersec);
 
     GLuint shaderProgramObject = createShaderProgramObject();

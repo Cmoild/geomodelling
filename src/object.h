@@ -336,29 +336,42 @@ public:
         bool res = false;
         for (int i = 0; i < vertices.size(); i += 3) {
             glm::vec4 vertex = model * glm::vec4(vertices[i], vertices[i + 1], vertices[i + 2], 1.0f);
-            // if (sqrt(pow(vertices[i] + position.x - s->position.x, 2) + pow(vertices[i + 1] + position.y - s->position.y, 2) + pow(vertices[i + 2] + position.z - s->position.z, 2)) <= s->r) {
-            //     if (!res) {
-            //         res = true;
-            //         std::cout << ' ' << s->position.x << ' ' << s->position.y << ' ' << s->position.z << std::endl;
-            //         std::cout << sqrt(pow(vertices[i] + position.x - s->position.x, 2) + pow(vertices[i + 1] + position.y - s->position.y, 2) + pow(vertices[i + 2] + position.z - s->position.z, 2)) << std::endl;
-            //         std::cout << sqrt(pow(vertex[0] - s->position.x, 2) + pow(vertex[1] - s->position.y, 2) + pow(vertex[2] - s->position.z, 2)) << std::endl;
-            //     }
-            // }
+
             if (sqrt(pow(vertex.x - s->position.x, 2) + pow(vertex.y - s->position.y, 2) + pow(vertex.z - s->position.z, 2)) <= s->r) {
-                //std::cout << '!' << std::endl;
-                obj->vertices.push_back(vertices[i]);
-                obj->vertices.push_back(vertices[i + 1]);
-                obj->vertices.push_back(vertices[i + 2]);
+                
+                obj->vertices.push_back(vertex.x);
+                obj->vertices.push_back(vertex.y);
+                obj->vertices.push_back(vertex.z);
                 n++;
-                std::cout << vertices[i] << ' ' << vertices[i + 1] << ' ' << vertices[i + 2] << std::endl;
                 if (!res) {
                     res = true;
-                    //std::cout << sqrt(pow(vertex[0] - s->position.x, 2) + pow(vertex[1] - s->position.y, 2) + pow(vertex[2] - s->position.z, 2)) << std::endl;
                 }
             }
         }
         if (res) {
             std::cout << "Intersection1" << std::endl;
+        }
+
+        res = false;
+        for (float i = 0.f; i <= h; i += 0.02f) {
+            float locR = (i - h * r1 / (r1 - r2)) / (h / (r2 - r1));
+
+            for (float t = 0; t < 360; t += 1) {
+                glm::vec4 vertex = model * glm::vec4(locR * cos(glm::radians(t)), i, locR * sin(glm::radians(t)), 1.0f);
+                if (sqrt(pow(vertex.x - s->position.x, 2) + pow(vertex.y - s->position.y, 2) + pow(vertex.z - s->position.z, 2)) <= s->r) {
+                    obj->vertices.push_back(vertex.x);
+                    obj->vertices.push_back(vertex.y);
+                    obj->vertices.push_back(vertex.z);
+                    n++;
+                    if (!res) {
+                        res = true;
+                    }
+                }
+            }
+        }
+
+        if (res) {
+            std::cout << "Intersection2" << std::endl;
         }
 
         glm::mat4 modelSphere = glm::mat4(1.0f);
@@ -384,7 +397,7 @@ public:
             }
         }
         if (res) {
-            std::cout << "Intersection2" << std::endl;
+            std::cout << "Intersection3" << std::endl;
         }
 
         for (int i = 0; i < obj->vertices.size() / 3; i ++) {
