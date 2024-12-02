@@ -278,7 +278,6 @@ public:
         glDeleteVertexArrays(1, &VAO);
         glDeleteBuffers(1, &VBO);
         glDeleteBuffers(1, &EBO);
-        delete this;
     }
 
 };
@@ -342,7 +341,7 @@ public:
                 obj->vertices.push_back(vertex.x);
                 obj->vertices.push_back(vertex.y);
                 obj->vertices.push_back(vertex.z);
-                n++;
+                // n++;
                 if (!res) {
                     res = true;
                 }
@@ -362,7 +361,7 @@ public:
                     obj->vertices.push_back(vertex.x);
                     obj->vertices.push_back(vertex.y);
                     obj->vertices.push_back(vertex.z);
-                    n++;
+                    // n++;
                     if (!res) {
                         res = true;
                     }
@@ -372,6 +371,30 @@ public:
 
         if (res) {
             std::cout << "Intersection2" << std::endl;
+        }
+
+        res = false;
+        for (float i = 0.f; i <= h; i += h) {
+            float locR = (i - h * r1 / (r1 - r2)) / (h / (r2 - r1));
+
+            for (float t = 0; t < 360; t += 1) {
+                for (float j = 0.f; j <= 1.f; j += 0.02f) {
+                    glm::vec4 vertex = model * glm::vec4(locR * j * cos(glm::radians(t)), i, locR * j * sin(glm::radians(t)), 1.0f);
+                    if (sqrt(pow(vertex.x - s->position.x, 2) + pow(vertex.y - s->position.y, 2) + pow(vertex.z - s->position.z, 2)) <= s->r) {
+                        obj->vertices.push_back(vertex.x);
+                        obj->vertices.push_back(vertex.y);
+                        obj->vertices.push_back(vertex.z);
+                        // n++;
+                        if (!res) {
+                            res = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (res) {
+            std::cout << "Intersection3" << std::endl;
         }
 
         glm::mat4 modelSphere = glm::mat4(1.0f);
@@ -397,13 +420,13 @@ public:
             }
         }
         if (res) {
-            std::cout << "Intersection3" << std::endl;
+            std::cout << "Intersection4" << std::endl;
         }
 
         for (int i = 0; i < obj->vertices.size() / 3; i ++) {
             obj->indices.push_back(i);
         }
-        std::cout << obj->vertices.size() << ' ' << n << std::endl;
+        // std::cout << obj->vertices.size() << ' ' << n << std::endl;
         obj->generateBuffers();
         obj->type = OBJECT_NONE;
 

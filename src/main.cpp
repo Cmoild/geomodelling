@@ -18,6 +18,8 @@ GLuint WIDTH = 800, HEIGHT = 600;
 
 glm::vec3 lightPos(0.f, 0.f, 4.0f);
 
+std::vector<Object*> objects; // Объекты для отрисовки (квадрат, сфера, усечённый конус, пересечение)
+
 void setView(glm::mat4& matrix, float cameraX, float cameraY, float cameraZ) {
     matrix[3][0] = -cameraX; matrix[3][1] = -cameraY; matrix[3][2] = -cameraZ;
 }
@@ -173,6 +175,7 @@ void renderScene(std::vector<Object*> objects, GLuint shaderProgram, GLuint shad
     model = glm::rotate(model, glm::radians(angleY), glm::vec3(0.0f, 1.0f, 0.0f));
 
     for (int i = 0; i < objects.size(); i++) {
+        if (skipRender[i]) continue;
         objects[i]->model = model;
         // objects[i]->model = glm::translate(objects[i]->model, objects[i]->position);
         objects[i]->model = glm::rotate(objects[i]->model, glm::radians(objects[i]->rotation[0]), glm::vec3(1.0f, 0.0f, 0.0f));
@@ -210,7 +213,7 @@ void renderScene(std::vector<Object*> objects, GLuint shaderProgram, GLuint shad
         else if (objects[i]->type == OBJECT_NONE)
             glDrawElements(GL_POINTS, objects[i]->indices.size(), GL_UNSIGNED_INT, 0);
         else
-            glDrawElements(GL_LINES, objects[i]->indices.size(), GL_UNSIGNED_INT, 0);
+            glDrawElements(GL_POINTS, objects[i]->indices.size(), GL_UNSIGNED_INT, 0);
     }
 
 }
@@ -221,6 +224,12 @@ enum class ShapeType {
     Circle,
     Rectangle,
     SemiCircle
+};
+
+enum class StandardShapeType {
+    None,
+    TruncaredCone,
+    Sphere
 };
 
 // Перечисление режимов создания
@@ -235,12 +244,17 @@ enum class ObjCreatingMode {
 struct ShapeParameters {
     ImVec4 color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);  // Красный цвет по умолчанию
     float radius = 0.0f;  // Размер фигуры по умолчанию
+    float radius2 = 0.0f;
+    float height = 0.0f;
     float rotatingRadius = 0.0f;  // Размер фигуры по умолчанию
     float length = 0.0f;  // Длина фигуры по умолчанию
 };
 
 // Текущая переменная для хранения выбранной фигуры
 ShapeType currentShape = ShapeType::None;
+
+// Текущая переменная для хранения выбранной стандартной фигуры
+StandardShapeType currentStandardShape = StandardShapeType::None;
 
 // Текущий режим создания
 ObjCreatingMode currentCreatingMode = ObjCreatingMode::None;
@@ -311,6 +325,116 @@ void ShowShapeConfigPopup() {
     }
 }
 
+void ShowStandardShapeConfigPopup() {
+    // Проверка, запущено ли всплывающее окно
+    if (ImGui::BeginPopupModal("Настройки фигуры", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        
+        // Выбор типа фигуры
+        ImGui::Text("Тип фигуры:");
+        if (ImGui::RadioButton("Усечённый конус", currentStandardShape == StandardShapeType::TruncaredCone)) {
+            currentStandardShape = StandardShapeType::TruncaredCone;
+        }
+        if (ImGui::RadioButton("Сфера", currentStandardShape == StandardShapeType::Sphere)) {
+            currentStandardShape = StandardShapeType::Sphere;
+        }
+
+        ImGui::Separator();
+
+        // Выбор цвета
+        ImGui::Text("Цвет:");
+        ImGui::ColorEdit4("Цвет фигуры", (float*)&shapeParams.color);
+        if (currentStandardShape == StandardShapeType::TruncaredCone) {
+            ImGui::Text("Радиус r1 (нижний):");
+            ImGui::InputFloat("##00", &shapeParams.radius, 0.0f, 100.0f);
+            ImGui::Text("Радиус r2 (верхний):");
+            ImGui::InputFloat("##01", &shapeParams.radius2, 0.0f, 100.0f);
+            ImGui::Text("Высота:");
+            ImGui::InputFloat("##02", &shapeParams.height, 0.0f, 100.0f);
+            ImGui::Separator();
+        }
+        if (currentStandardShape == StandardShapeType::Sphere) {
+            ImGui::Text("Радиус:");
+            ImGui::InputFloat("##03", &shapeParams.radius, 0.0f, 100.0f);
+            ImGui::Separator();
+        }
+
+        // Кнопка закрытия всплывающего окна
+        if (ImGui::Button("Закрыть")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Создать")) {
+            if (currentStandardShape == StandardShapeType::TruncaredCone) {
+                Object *tmp = objects[2];
+                objects[2] = new TruncCone({0.f, 0.f, 0.f}, shapeParams.radius, shapeParams.radius2, shapeParams.height);
+                delete tmp;
+                objects[2]->FragColor = glm::vec4(shapeParams.color.x, shapeParams.color.y, shapeParams.color.z, shapeParams.color.w);
+                skipRender[2] = false;
+            }
+            if (currentStandardShape == StandardShapeType::Sphere) {
+                Object *tmp = objects[1];
+                objects[1] = new Sphere({0.f, 0.f, 0.f}, shapeParams.radius);
+                delete tmp;
+                objects[1]->FragColor = glm::vec4(shapeParams.color.x, shapeParams.color.y, shapeParams.color.z, shapeParams.color.w);
+                skipRender[1] = false;
+            }
+        }
+
+        ImGui::EndPopup();
+    }
+}
+
+// bool showEditPopup = false;
+
+void ShowEditPopup() {
+    if (ImGui::BeginPopupModal("Изменить", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        
+        // Выбор типа фигуры
+        ImGui::Text("Тип фигуры:");
+        if (ImGui::RadioButton("Усечённый конус", currentStandardShape == StandardShapeType::TruncaredCone)) {
+            currentStandardShape = StandardShapeType::TruncaredCone;
+        }
+        if (ImGui::RadioButton("Сфера", currentStandardShape == StandardShapeType::Sphere)) {
+            currentStandardShape = StandardShapeType::Sphere;
+        }
+
+        ImGui::Separator();
+
+        if (currentStandardShape == StandardShapeType::TruncaredCone && objects[2]) {
+            ImGui::Text("Позиция:");
+            ImGui::InputFloat("x##00", &objects[2]->position.x, -100.0f, 100.0f);
+            ImGui::SameLine();
+            ImGui::InputFloat("y##01", &objects[2]->position.y, -100.0f, 100.0f);
+            ImGui::SameLine();
+            ImGui::InputFloat("z##02", &objects[2]->position.z, -100.0f, 100.0f);
+            ImGui::Text("Угол поворота (в градусах):");
+            ImGui::InputFloat("x##03", &objects[2]->rotation.x, 0.0f, 360.0f);
+            ImGui::SameLine();
+            ImGui::InputFloat("y##04", &objects[2]->rotation.y, 0.0f, 360.0f);
+            ImGui::SameLine();
+            ImGui::InputFloat("z##05", &objects[2]->rotation.z, 0.0f, 360.0f);
+            ImGui::Separator();
+        }
+        if (currentStandardShape == StandardShapeType::Sphere && objects[1]) {
+            ImGui::Text("Позиция:");
+            ImGui::InputFloat("x##00", &objects[1]->position.x, -100.0f, 100.0f);
+            ImGui::SameLine();
+            ImGui::InputFloat("y##01", &objects[1]->position.y, -100.0f, 100.0f);
+            ImGui::SameLine();
+            ImGui::InputFloat("z##02", &objects[1]->position.z, -100.0f, 100.0f);
+            ImGui::Separator();
+        }
+
+        // Кнопка закрытия всплывающего окна
+        if (ImGui::Button("Закрыть")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+
+        ImGui::EndPopup();
+    }
+}
+
 void VerticalSeparator(float height = 0.0f) {
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
@@ -354,7 +478,8 @@ void DrawShapesWindow() {
         currentCreatingMode = ObjCreatingMode::Standard;
     }
 
-    ShowShapeConfigPopup();
+    if (!(currentCreatingMode == ObjCreatingMode::Standard)) ShowShapeConfigPopup();
+    else ShowStandardShapeConfigPopup();
 
     ImGui::End();
 }
@@ -372,17 +497,29 @@ void DrawOptionsWindow() {
     ImGui::Begin("Options Window", nullptr, window_flags);
 
     ImGui::Text("Опции:");
-    if (ImGui::Button("Выбрать", ImVec2(100, 20))) {
-        // Логика для настройки 1
-    }
-    if (ImGui::Button("Удалить", ImVec2(100, 20))) {
+    if (ImGui::Button("Показать | Cкрыть", ImVec2(100, 20))) {
         // Логика для настройки 2
-        skipRender[1] = !skipRender[1];
-        skipRender[2] = !skipRender[2];
+        if (objects[1] && objects[2]) {
+            skipRender[1] = !skipRender[1];
+            skipRender[2] = !skipRender[2];
+        }
     }
     if (ImGui::Button("Изменить", ImVec2(100, 20))) {
         // Логика для настройки 2
+        // showEditPopup = true;
+        ImGui::OpenPopup("Изменить");
     }
+    if (ImGui::Button("Найти пересечение", ImVec2(100, 20)) && objects[1] && objects[2]) {
+
+        Object* tmp = objects[3];
+        TruncCone* c = (TruncCone*)objects[2];
+        Sphere* s = (Sphere*)objects[1];
+        objects[3] = c->checkIntersection(s);
+        skipRender[3] = false;
+        delete tmp;
+    }
+
+    ShowEditPopup();
 
     ImGui::End();
 }
@@ -446,26 +583,29 @@ int main(int argc, char* argv[]) {
     object3->FragColor = {0.f, 0.f, 1.f, 1.f};
     skipRender.push_back(0);
 
-    Sphere* sphere = new Sphere({0.f, 0.f, 0.f}, 0.5f);
-    sphere->FragColor = {1.f, 1.f, 0.f, 1.f};
-    sphere->position = {0.f, 1.f, 0.f};
-    skipRender.push_back(0);
+    // Sphere* sphere = new Sphere({0.f, 0.f, 0.f}, 0.5f);
+    // sphere->FragColor = {1.f, 1.f, 0.f, 1.f};
+    // sphere->position = {0.f, 0.6f, -0.3f};
+    skipRender.push_back(1);
 
-    TruncCone* cone = new TruncCone({0.f, 0.f, 0.f}, 0.5f, 0.25f, 1.f);
-    cone->FragColor = {1.f, 0.f, 0.f, 1.f};
-    cone->position = {0.f, 0.f, 0.f};
-    cone->rotation = {45.f, 0.f, 0.f};
-    skipRender.push_back(0);
+    // TruncCone* cone = new TruncCone({0.f, 0.f, 0.f}, 0.5f, 0.25f, 1.f);
+    // cone->FragColor = {1.f, 0.f, 0.f, 1.f};
+    // cone->position = {0.f, 0.f, 0.f};
+    // cone->rotation = {10.f, 0.f, 0.f};
+    skipRender.push_back(1);
 
-    Object* intersec = cone->checkIntersection(sphere);
-    intersec->FragColor = {1.f, 1.f, 1.f, 1.f};
-    skipRender.push_back(0);
+    // Object* intersec = cone->checkIntersection(sphere);
+    // intersec->FragColor = {1.f, 1.f, 1.f, 1.f};
+    skipRender.push_back(1);
     
-    std::vector<Object*> objects;
     objects.push_back(object3);
-    objects.push_back(cone);
-    objects.push_back(sphere);
-    objects.push_back(intersec);
+    // objects.push_back(cone);
+    // objects.push_back(sphere);
+    // objects.push_back(intersec);
+    objects.push_back(nullptr);
+    objects.push_back(nullptr);
+    objects.push_back(nullptr);
+
 
     GLuint shaderProgramObject = createShaderProgramObject();
     GLuint shaderProgramEdges = createShaderProgramEdges();

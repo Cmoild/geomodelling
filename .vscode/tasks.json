@@ -20,7 +20,7 @@
                 "${workspaceFolder}/src/imgui/imgui_widgets.cpp",
                 "-lglfw3dll",
                 "-lopengl32",
-                //"-mwindows",
+                "-mwindows",
                 "-o",
                 "${workspaceFolder}/geomod.exe"
             ],
